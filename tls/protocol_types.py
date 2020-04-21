@@ -1,10 +1,12 @@
 import time
 import os
 import io
+import itertools
 
 from logging import debug
 
 from .base import Enum8, Enum16, Decode, Encode, Read, Struct
+from .encoder import kems, signs, camel_to_snake, oids
 
 def bytes_or_json(v):
     if hasattr(v, 'to_json'):
@@ -58,6 +60,13 @@ class SignatureScheme(Enum16):
     ED25519 = 0x0807
     ED448 = 0x0808
 
+
+for (i, alg) in enumerate(signs):
+    alg = camel_to_snake(alg).upper()
+    setattr(SignatureAlgorithm, alg, 4 + i)
+    setattr(SignatureScheme, alg, 0xFE00 + i)
+
+
 class ClientCertificateType(Enum8):
     RSASign = 1
     DSSSign = 2
@@ -78,11 +87,11 @@ class Compression(Enum8):
     Deflate = 1
     LSZ = 64
     MAX = 0xff
-    
+
     @staticmethod
     def all():
         return [ Compression.Deflate, Compression.LSZ, Compression.Null ]
-    
+
     @staticmethod
     def none():
         return [ Compression.Null ]
@@ -257,7 +266,7 @@ class Heartbeat(Struct):
     def to_json(self):
         return dict(type = HeartbeatMessageType.to_json(self.type),
                     payload = bytes_or_json(self.payload))
-    
+
     @staticmethod
     def read(f):
         h = Heartbeat()
@@ -311,7 +320,7 @@ class Handshake(Struct):
 
 class Random(Struct):
     NONCE_LEN = 28
-    
+
     def __init__(self, utctime = None, nonce = None):
         Struct.__init__(self)
         self.time = utctime
@@ -368,7 +377,7 @@ class ExtensionType(Enum16):
     NextProtocolNegotiation = 0x3374
     ChannelId = 0x754f
     RenegotiationInfo = 0xff01
-    
+
     MAX = 0xffff
 
 class Extension(Struct):
@@ -426,11 +435,11 @@ class ServerName(Struct):
     def to_json(self):
         return dict(type = ServerNameType.to_json(self.type),
                     body = bytes_or_json(self.body))
-    
+
     @staticmethod
     def hostname(h):
         return ServerName(ServerNameType.HostName, bytes(h, 'utf-8'))
-    
+
     @staticmethod
     def read(f):
         sn = ServerName(None, None)
@@ -480,6 +489,7 @@ class NamedCurve(Enum16):
 
     MAX = 0xffff
 
+
 class NamedGroup(Enum16):
     secp256r1 = 23
     secp384r1 = 24
@@ -491,6 +501,10 @@ class NamedGroup(Enum16):
     FFDHE4096 = 258
     FFDHE6144 = 259
     FFDHE8192 = 260
+
+for (i, kem) in enumerate(kems):
+    kem = kem
+    setattr(NamedGroup, kem.upper(), 508+i)
 
 class EllipticCurvesExtensionBody(Struct):
     def __init__(self, curves = None):
@@ -506,7 +520,7 @@ class EllipticCurvesExtensionBody(Struct):
     @staticmethod
     def read(f):
         return EllipticCurvesExtensionBody(Read.vec(f, Read.u16, NamedCurve.read))
-    
+
     @staticmethod
     def all_named_curves():
         return EllipticCurvesExtensionBody(list(range(NamedCurve.sect163k1,
@@ -517,7 +531,7 @@ class EllipticCurvesExtensionBody(Struct):
         return EllipticCurvesExtensionBody([NamedCurve.secp256r1,
                                             NamedCurve.secp384r1,
                                             NamedCurve.secp521r1])
-    
+
 
 
 class ClientHello(Struct):
@@ -562,7 +576,7 @@ class ClientHello(Struct):
         left = f.read()
         if len(left):
             c.extensions = Read.vec(io.BytesIO(left), Read.u16, Extension.read)
-        
+
         return c
 
 class ServerHello(Struct):
@@ -603,7 +617,7 @@ class ServerHello(Struct):
         left = f.read()
         if len(left):
             s.extensions = Read.vec(io.BytesIO(left), Read.u16, Extension.read)
-            
+
         return s
 
 class ServerHelloDone(Struct):
@@ -617,13 +631,13 @@ class ClientKeyExchange(Struct):
     def __init__(self, body = None):
         Struct.__init__(self)
         self.body = body if body else []
-    
+
     def encode(self):
         return self.body
 
     def to_json(self):
         return bytes_or_json(self.body)
-    
+
     @staticmethod
     def read(f):
         c = ClientKeyExchange()
@@ -634,13 +648,13 @@ class ServerKeyExchange(Struct):
     def __init__(self, body = None):
         Struct.__init__(self)
         self.body = body if body else []
-    
+
     def encode(self):
         return self.body
 
     def to_json(self):
         return bytes_or_json(self.body)
-    
+
     @staticmethod
     def read(f):
         c = ServerKeyExchange()
@@ -651,13 +665,13 @@ class Finished(Struct):
     def __init__(self, body = None):
         Struct.__init__(self)
         self.body = body if body else []
-    
+
     def encode(self):
         return self.body
 
     def to_json(self):
         return bytes_or_json(self.body)
-    
+
     @staticmethod
     def read(f):
         c = Finished()
@@ -756,5 +770,5 @@ class Message(Struct):
         return dict(type = ContentType.to_json(self.type),
                     version = ProtocolVersion.to_json(self.version),
                     body = bytes_or_json(self.body))
-                    
+
 
