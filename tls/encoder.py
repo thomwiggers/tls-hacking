@@ -68,6 +68,7 @@ signs = [
     "Picnic2L5Fs",
     "QTeslaPI",
     "QTeslaPIII",
+    "XMSS"
 ]
 
 kems = [
